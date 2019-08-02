@@ -4,6 +4,7 @@ import pykalman
 import param_estimation 
 
 
+
 def kalman_filter_sm(foh, fhv, fvh, o_array, v_array, smooth_param=300.0):
     
     trans_mat = get_state_transition_matrix(foh, fhv, fvh)
@@ -28,32 +29,9 @@ def kalman_filter_sm(foh, fhv, fvh, o_array, v_array, smooth_param=300.0):
     data = numpy.zeros((n,2))
     data[:,0] = o_array
     data[:,1] = v_array
-
     state_filt, state_cov =  kalman.smooth(data)
 
-    a_array_filt = param_estimation.find_a_array(foh_est, state_filt[:,0])
-    acum_array_filt = a_array_filt.cumsum()
-
-    o_array_filt = state_filt[:,0]
-    h_array_filt = state_filt[:,1]
-    v_array_filt = state_filt[:,2]
-
-
-    values  = {
-            'o_array'    : o_array_filt,
-            'h_array'    : h_array_filt, 
-            'v_array'    : v_array_filt,
-            'a_array'    : a_array_filt,
-            'acum_array' : acum_array_filt,
-            }
-
-    variance = {
-            'o_array' : state_cov[0,0],
-            'h_array' : state_cov[1,1],
-            'v_array' : state_cov[2,2],
-            }
-
-    return values, variance
+    return extract_kalman_data(foh, state_filt, state_cov)
 
 
 def kalman_filter_em(foh, fhv, fvh, o_array, v_array):
@@ -82,8 +60,12 @@ def kalman_filter_em(foh, fhv, fvh, o_array, v_array):
     data = numpy.zeros((n,2))
     data[:,0] = o_array
     data[:,1] = v_array
-
     state_filt, state_cov =  kalman.em(data).smooth(data)
+
+    return extract_kalman_data(foh, state_filt, state_cov)
+
+
+def extract_kalman_data(foh, state_filt, state_cov):
 
     a_array_filt = param_estimation.find_a_array(foh, state_filt[:,0])
     acum_array_filt = a_array_filt.cumsum()
@@ -91,6 +73,17 @@ def kalman_filter_em(foh, fhv, fvh, o_array, v_array):
     o_array_filt = state_filt[:,0]
     h_array_filt = state_filt[:,1]
     v_array_filt = state_filt[:,2]
+
+    o_array_var = state_cov[:,0,0]
+    h_array_var = state_cov[:,1,1]
+    v_array_var = state_cov[:,2,2]
+
+    a_array_filt = param_estimation.find_a_array(foh, o_array_filt)
+    acum_array_filt = a_array_filt.cumsum()
+
+    a_array_var = numpy.zeros(o_array_var.shape)
+    a_array_var[:-1] = o_array_var[1:] + (1-foh)*o_array_var[:-1] 
+    a_array_var[-1] = o_array_var[-2]
 
     values  = {
             'o_array'    : o_array_filt,
@@ -101,12 +94,14 @@ def kalman_filter_em(foh, fhv, fvh, o_array, v_array):
             }
 
     variance = {
-            'o_array' : state_cov[0,0],
-            'h_array' : state_cov[1,1],
-            'v_array' : state_cov[2,2],
+            'o_array' : o_array_var,
+            'h_array' : h_array_var,
+            'v_array' : v_array_var,
+            'a_array' : a_array_var,
             }
 
     return values, variance
+
 
 
 def get_state_transition_matrix(foh, fhv, fvh):
@@ -123,6 +118,90 @@ def get_observation_matrix():
         [0.0, 0.0, 1.0]
         ])
     return mat
+
+
+# 2nd form w/ arrivals and cummulative arrivals in kalman filter
+# --------------------------------------------------------------------------------------
+
+def kalman_filter_sm2(foh, fhv, fvh, o_array, v_array, smooth_param=300.0):
+    
+    trans_mat = get_state_transition_matrix2(foh, fhv, fvh)
+    obser_mat = get_observation_matrix2()
+
+    trans_cov = 1.0*numpy.diag(numpy.ones((trans_mat.shape[0],)))
+    obser_cov = smooth_param*numpy.diag(numpy.ones((obser_mat.shape[0],)))
+
+    init_state = numpy.zeros((trans_mat.shape[0],))
+    init_state_cov = numpy.diag(numpy.ones((trans_mat.shape[0],)))
+
+    kalman = pykalman.KalmanFilter( 
+            transition_matrices = trans_mat, 
+            observation_matrices = obser_mat, 
+            transition_covariance = trans_cov, 
+            observation_covariance = obser_cov, 
+            initial_state_mean = init_state, 
+            initial_state_covariance = init_state_cov
+            )
+
+    n = o_array.shape[0]
+    data = numpy.zeros((n,2))
+    data[:,0] = o_array
+    data[:,1] = v_array
+    state_filt, state_cov =  kalman.smooth(data)
+
+    #return extract_kalman_data2(foh, state_filt, state_cov)
+
+
+def kalman_filter_em2(foh, fhv, fvh, o_array, v_array):
+
+    trans_mat = get_state_transition_matrix2(foh, fhv, fvh)
+    obser_mat = get_observation_matrix2()
+
+    o_array_var = numpy.diff(o_array).var()
+    v_array_var = numpy.diff(v_array).var()
+
+    obser_cov = numpy.cov(numpy.array([o_array, v_array]))
+
+    init_state = numpy.zeros((trans_mat.shape[0],))
+    init_state_cov = numpy.diag(numpy.ones((trans_mat.shape[0],)))
+
+    kalman = pykalman.KalmanFilter( 
+            transition_matrices = trans_mat, 
+            observation_matrices = obser_mat, 
+            initial_state_mean = init_state, 
+            initial_state_covariance = init_state_cov,
+            observation_covariance = obser_cov,
+            em_vars = ['transition_covariance'],
+            )
+
+    n = o_array.shape[0]
+    data = numpy.zeros((n,2))
+    data[:,0] = o_array
+    data[:,1] = v_array
+    state_filt, state_cov =  kalman.em(data).smooth(data)
+
+    #return extract_kalman_data2(foh, state_filt, state_cov)
+
+
+def get_state_transition_matrix2(foh, fhv, fvh):
+    mat = numpy.array([
+        [1.0,  1.0,     0.0,      0.0,       0.0],
+        [0.0,  1.0,     0.0,      0.0,       0.0],
+        [0.0,  1.0, 1.0-foh,      0.0,       0.0],
+        [0.0,  0.0,     foh,  1.0-fhv,       fvh],
+        [0.0,  0.0,     0.0,      fhv,   1.0-fvh],
+        ])
+    return mat
+
+
+def get_observation_matrix2():
+    mat = numpy.array([
+        [0.0, 0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 0.0, 1.0]
+        ])
+    return mat
+
+
 
 
 # Testing

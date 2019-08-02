@@ -160,6 +160,7 @@ def find_a_array(foh, o_array):
     return a_array
 
 
+
 def run_fly_trap_submodel(foh, fhv, fvh, o_array, h_init=0.0, v_init=0.0): 
     """
     Runs  the fly trap submodel simulation ith the given transistion
