@@ -3,9 +3,14 @@ import numpy
 import flytrap_model
 import matplotlib.pyplot as plt
 
-dirname = './data/2019_05_08_experiment'
-trap = 'C'
 
+#dirname = './data/2019_05_08_experiment'
+#trap = 'C'
+
+dirname = './data/2017_10_26_experiment'
+trap = 'G'
+
+#model, values, variance, inputs = flytrap_model.fit_and_filter_from_dir(dirname,trap,method='sm',smooth_param=0.01)
 model, values, variance, inputs = flytrap_model.fit_and_filter_from_dir(dirname,trap)
 
 t_array = inputs['t_array']
