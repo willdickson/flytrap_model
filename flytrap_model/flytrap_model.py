@@ -66,8 +66,14 @@ def fit_and_filter(o_array, v_array, count_final, method='em', smooth_param=150.
 
     if method == 'em':
         values, variance = kalman_filter.kalman_filter_em(foh_est, fhv_est, fvh_est, o_array, v_array)
-    else:
+    elif method == 'sm':
         values, variance = kalman_filter.kalman_filter_sm(foh_est, fhv_est, fvh_est, o_array, v_array, smooth_param=smooth_param)
+    elif method == 'unscented':
+        print('unscented')
+        values, variance = kalman_filter.unscented_kalman_filter_sm(foh_est, fhv_est, fvh_est, o_array, v_array, smooth_param=smooth_param)
+    else:
+        raise ValueError('unknown kalman filtering method')
+
 
     # Mega kalman filter (test)
     # -------------------------------------------------------------------------------------------------------
@@ -75,7 +81,7 @@ def fit_and_filter(o_array, v_array, count_final, method='em', smooth_param=150.
     #kalman_filter.kalman_filter_em2(foh_est, fhv_est, fvh_est, o_array, v_array)
     # -------------------------------------------------------------------------------------------------------
 
-    values['count_final'] = values['h_array'] + values['v_array']
+    values['count_final'] = values['h_array'][-1] + values['v_array'][-1]
     model = {'foh': foh_est, 'fhv': fhv_est, 'fvh': fvh_est}
     inputs = {'o_array': o_array, 'v_array': v_array, 'count_final': count_final}
 

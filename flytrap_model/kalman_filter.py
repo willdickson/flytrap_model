@@ -4,6 +4,83 @@ import pykalman
 import param_estimation 
 
 
+def unscented_kalman_filter_sm(foh, fhv, fvh, o_array, v_array, smooth_param=300.0):
+
+    filter_type = 'additive'
+    #filter_type = 'normal'
+
+    trans_mat = get_state_transition_matrix(foh, fhv, fvh)
+    obser_mat = get_observation_matrix()
+
+    trans_cov = 1.0*numpy.diag(numpy.ones((trans_mat.shape[0],)))
+    # DEVEL
+    # -------------------------------------------
+    for i in range(1,trans_mat.shape[0]):
+        trans_cov[i] = 0.0
+    # -------------------------------------------
+
+    obser_cov = smooth_param*numpy.diag(numpy.ones((obser_mat.shape[0],)))
+
+    init_state = numpy.zeros((trans_mat.shape[0],))
+    init_state_cov = numpy.diag(numpy.ones((trans_mat.shape[0],)))
+
+    if filter_type == 'additive':
+
+        def state_transition_func(curr_state):
+            next_state = numpy.dot(trans_mat, curr_state)
+            next_state[next_state < 0] = 0.0
+            return next_state
+
+        def observation_func(curr_state):
+            obser = numpy.dot(obser_mat, curr_state)
+            obser[obser < 0] = 0.0
+            return obser
+
+        kalman = pykalman.AdditiveUnscentedKalmanFilter(
+                transition_functions = state_transition_func,
+                observation_functions = observation_func, 
+                transition_covariance = trans_cov, 
+                observation_covariance = obser_cov, 
+                initial_state_mean = init_state, 
+                initial_state_covariance = init_state_cov
+                )
+
+
+    else:
+
+        def state_transition_func(curr_state, noise):
+            next_state = numpy.dot(trans_mat, curr_state)
+            mask = next_state < 0
+            next_state[mask] = 0.0 
+            next_state += noise
+            return next_state
+
+        def observation_func(curr_state, noise):
+            obser = numpy.dot(obser_mat, curr_state)
+            mask = obser < 0
+            obser[mask] = 0.0
+            obser += noise
+            return obser
+
+        kalman = pykalman.UnscentedKalmanFilter(
+                transition_functions = state_transition_func,
+                observation_functions = observation_func, 
+                transition_covariance = trans_cov, 
+                observation_covariance = obser_cov, 
+                initial_state_mean = init_state, 
+                initial_state_covariance = init_state_cov
+                )
+
+
+    n = o_array.shape[0]
+    data = numpy.zeros((n,2))
+    data[:,0] = o_array
+    data[:,1] = v_array
+    state_filt, state_cov =  kalman.smooth(data)
+
+    return extract_kalman_data(foh, state_filt, state_cov)
+
+
 
 def kalman_filter_sm(foh, fhv, fvh, o_array, v_array, smooth_param=300.0):
     
@@ -11,6 +88,11 @@ def kalman_filter_sm(foh, fhv, fvh, o_array, v_array, smooth_param=300.0):
     obser_mat = get_observation_matrix()
 
     trans_cov = 1.0*numpy.diag(numpy.ones((trans_mat.shape[0],)))
+    # DEVEL
+    # -------------------------------------------
+    for i in range(1,trans_mat.shape[0]):
+        trans_cov[i] = 0.0
+    # -------------------------------------------
     obser_cov = smooth_param*numpy.diag(numpy.ones((obser_mat.shape[0],)))
 
     init_state = numpy.zeros((trans_mat.shape[0],))
